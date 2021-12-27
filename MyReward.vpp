@@ -1,0 +1,109 @@
+-- User
+class User 
+
+types
+	UserID = nat1;
+	UserName = seq of char;
+
+values
+
+instance variables
+	private userName: UserName;
+		inv len(userName) >= 8;
+	private credits: real := 0; -- in RM
+		inv credits >= 0;
+	private internetData: real := 1000; --in mb
+		inv internetData >= 0;
+	private reward: Reward;
+
+operations
+	public topupCredit : real ==> ()
+		topupCredit(topup) ==
+		(
+			if (topup > 0)
+			then 
+				reward.updateReward(topup);
+		);
+	public checkCredit : () ==> real
+		checkCredit() == return credits;
+
+functions
+
+end User
+
+-- Reward
+class Reward
+
+types
+	Duration::	day: nat
+		hour: nat 
+		minute: nat
+		second: nat;
+
+values
+private topupDataRatio: real = 100; -- in MB per RM, default 100MB per RM
+private topupDurationRatio: nat = 86400; -- in sec per RM, default 1 day per RM (:charity
+
+instance variables
+	private dataLeft: real := 0; --in MB
+		inv dataLeft >= 0;
+	private durationLeft: Duration := mk_Duration(0,0,0,0);
+		inv durationLeft.hour < 24 and durationLeft.minute < 60 and durationLeft.second < 60;
+	private tmpDuration: Duration;
+	private count: nat;
+
+operations
+	private updateDataLeft : real ==> ()
+		updateDataLeft(data) ==
+		(
+			if (data > 0)
+			then dataLeft := dataLeft + data;
+		);
+	private updateDurationLeft : nat ==> ()
+		updateDurationLeft(ss) ==
+		(
+			tmpDuration.second := durationLeft.second + ss;
+			
+			if tmpDuration.second >= 60
+			then 
+				count := tmpDuration.second div 60;
+				tmpDuration.second := tmpDuration.second - (count * 60);
+				tmpDuration.minute := tmpDuration.minute + count;
+			
+			if tmpDuration.minute >= 60
+			then 
+				count := tmpDuration.minute div 60;
+				tmpDuration.minute := tmpDuration.minute - (count * 60);
+				tmpDuration.hour := tmpDuration.hour + count;
+			
+			if tmpDuration.hour >= 24
+			then 
+				count := tmpDuration.hour div 24;
+				tmpDuration.hour := tmpDuration.hour - (count * 24);
+				tmpDuration.day := tmpDuration.day + count;
+				
+			durationLeft := tmpDuration;
+		);
+	public updateReward : real ==> ()
+		updateReward(topup) ==
+		(
+			if (topup > 0)
+			then 
+				updateDataLeft(turnTopupToData(topup));
+				updateDurationLeft(turnTopupToDuration(topup));
+		);
+
+functions
+	private turnTopupToData : real -> real
+	turnTopupToData(topup) ==
+		topup * topupDataRatio;
+
+	private turnTopupToDuration : real -> nat
+	turnTopupToDuration(topup) ==
+		floor(topup * topupDurationRatio);
+
+	-- private getReward : () -> ()
+	-- getReward() ==
+	-- 	();
+
+end Reward
