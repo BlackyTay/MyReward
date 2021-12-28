@@ -6,30 +6,35 @@ types
 values
 
 instance variables
-	private userList: set of User;
-	private tmpUser: User;
+	private userList: set of User := {};
 
 operations
 	public addUser:  seq of char ==> ()
 		addUser(name) ==
 		(
-			tmpUser := new User(generateId(),name);
+			userList := userList union {new User(generateId(),name)};
 		);
 	public generateId: () ==> nat1
 		generateId() == 
 		(
 			return if userList <> {}
-			then getMaxId(userList) + 1
+			then max(getUserListID()) + 1
 			else 1;
 		);
-
-	
-	
+	public getUserList: () ==> set of User
+		getUserList() == 
+			return userList;
+	public getUserListID: () ==> set of nat1
+		getUserListID() == 
+			return {y.userId | y in set userList & y.userId > 0};
 
 functions
-	public getMaxId(s: set of User) x: nat1
-	pre s <> {}
-	post x in set s and forall y in set s & x.getUserID() >= y.getUserID();
+	public max: set of nat1 -> nat1
+	max(s) == 
+		let x in set s be st
+			forall y in set s & x >= y
+		in x;
+			
 
 end MyReward
 
@@ -37,13 +42,12 @@ end MyReward
 class User 
 
 types
-	UserID = nat1;
 	UserName = seq of char;
 
 values
 
 instance variables
-	public userId: UserID;
+	public userId: nat1;
 	private userName: UserName;
 		inv len(userName) >= 8;
 	private credits: real := 0; -- in RM
@@ -53,6 +57,12 @@ instance variables
 	private reward: Reward;
 
 operations
+	public User : nat1*seq of char ==> User
+		User(id,name) ==
+		(
+			userId := id;
+			userName := name;
+		);
 	public topupCredit : real ==> ()
 		topupCredit(topup) ==
 		(
