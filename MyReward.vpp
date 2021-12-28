@@ -7,26 +7,51 @@ values
 
 instance variables
 	private userList: set of User := {};
+	private userToReward: map User to Reward := {|->};
 
 operations
-	public addUser:  seq of char ==> ()
-		addUser(name) ==
-		(
-			userList := userList union {new User(generateId(),name)};
-		);
-	public generateId: () ==> nat1
+	private generateId: () ==> nat1
 		generateId() == 
 		(
 			return if userList <> {}
 			then max(getUserListID()) + 1
 			else 1;
 		);
+	public addUser:  seq of char ==> ()
+		addUser(name) ==
+		(
+			userList := userList union {new User(generateId(),name)};
+		);
 	public getUserList: () ==> set of User
 		getUserList() == 
 			return userList;
 	public getUserListID: () ==> set of nat1
 		getUserListID() == 
-			return {y.userId | y in set userList & y.userId > 0};
+			return {y.getUserId() | y in set userList & y.getUserId() > 0};
+	public getUser: nat1 ==> User
+		getUser(id) == 
+		return 
+		let x in set userList be st
+			x.getUserId() = id
+		in x;
+	public checkUserReward: nat1 ==> bool
+		checkUserReward(userId) ==
+			return getUser(userId) in set dom userToReward;
+	public getUserReward: nat1 ==> Reward
+		getUserReward(userId) ==
+			return userToReward(getUser(userId));
+	public updateUserReward: nat1*real ==> ()
+		updateUserReward(userId,topup) ==
+			if checkUserReward(userId)
+			then getUserReward(userId).updateReward(topup)
+			else userToReward := userToReward++{getUser(userId) |-> new Reward(topup)};
+	public topupCreditForUser: nat1*real ==> ()
+		topupCreditForUser(userId,topup) ==
+		(
+			getUser(userId).topupCredit(topup);
+			updateUserReward(userId,topup);
+		);
+
 
 functions
 	public max: set of nat1 -> nat1
@@ -34,7 +59,6 @@ functions
 		let x in set s be st
 			forall y in set s & x >= y
 		in x;
-			
 
 end MyReward
 
@@ -47,34 +71,30 @@ types
 values
 
 instance variables
-	public userId: nat1;
+	private userId: nat1;
 	private userName: UserName;
 		inv len(userName) >= 8;
 	private credits: real := 0; -- in RM
 		inv credits >= 0;
-	private internetData: real := 1000; --in mb
+	private internetData: real := 1000; --in MB
 		inv internetData >= 0;
-	private reward: Reward;
 
 operations
-	public User : nat1*seq of char ==> User
+	public User : nat1*seq of char ==> User -- Constructor
 		User(id,name) ==
 		(
 			userId := id;
 			userName := name;
 		);
 	public topupCredit : real ==> ()
-		topupCredit(topup) ==
+		topupCredit(topup) == 
 		(
-			if (topup > 0)
-			then 
-				reward.updateReward(topup);
+			credits := credits + topup;
 		);
 	public checkCredit : () ==> real
 		checkCredit() == return credits;
-	public getUserID : () ==> nat1
-		getUserID() == return userId;
-
+	public getUserId : () ==> nat1
+		getUserId() == return userId;
 
 functions
 
@@ -90,46 +110,51 @@ types
 		second: nat;
 
 values
-private topupDataRatio: real = 100; -- in MB per RM, default 100MB per RM
-private topupDurationRatio: nat = 86400; -- in sec per RM, default 1 day per RM (:charity
+	private topupDataRatio: real = 100; -- in MB per RM, default 100MB per RM
+	private topupDurationRatio: nat = 86400; -- in sec per RM, default 1 day per RM (:charity
 
 instance variables
 	private dataLeft: real := 0; --in MB
 		inv dataLeft >= 0;
 	private durationLeft: Duration := mk_Duration(0,0,0,0);
 		inv durationLeft.hour < 24 and durationLeft.minute < 60 and durationLeft.second < 60;
-	private tmpDuration: Duration;
-	private count: nat;
 
 operations
+	public Reward: real ==> Reward -- Constructor
+		Reward(topup) == 
+		(
+			updateReward(topup);
+			return self;
+		);
 	private updateDataLeft : real ==> ()
 		updateDataLeft(data) ==
-		(
 			if (data > 0)
 			then dataLeft := dataLeft + data;
-		);
 	private updateDurationLeft : nat ==> ()
 		updateDurationLeft(ss) ==
-		(
+		
+		(	
+			dcl tmpDuration: Duration := mk_Duration(0,0,0,0),
+			 	count: nat := 0;
 			tmpDuration.second := durationLeft.second + ss;
 			
 			if tmpDuration.second >= 60
 			then 
 				count := tmpDuration.second div 60;
 				tmpDuration.second := tmpDuration.second - (count * 60);
-				tmpDuration.minute := tmpDuration.minute + count;
+				tmpDuration.minute := durationLeft.minute + count;
 			
 			if tmpDuration.minute >= 60
 			then 
 				count := tmpDuration.minute div 60;
 				tmpDuration.minute := tmpDuration.minute - (count * 60);
-				tmpDuration.hour := tmpDuration.hour + count;
+				tmpDuration.hour := durationLeft.hour + count;
 			
 			if tmpDuration.hour >= 24
 			then 
 				count := tmpDuration.hour div 24;
 				tmpDuration.hour := tmpDuration.hour - (count * 24);
-				tmpDuration.day := tmpDuration.day + count;
+				tmpDuration.day := durationLeft.day + count;
 				
 			durationLeft := tmpDuration;
 		);
@@ -150,9 +175,5 @@ functions
 	private turnTopupToDuration : real -> nat
 	turnTopupToDuration(topup) ==
 		floor(topup * topupDurationRatio);
-
-	-- private getReward : () -> ()
-	-- getReward() ==
-	-- 	();
 
 end Reward
