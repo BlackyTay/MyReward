@@ -1,3 +1,38 @@
+-- MyReward
+class MyReward 
+
+types
+
+values
+
+instance variables
+	private userList: set of User;
+	private tmpUser: User;
+
+operations
+	public addUser:  seq of char ==> ()
+		addUser(name) ==
+		(
+			tmpUser := new User(generateId(),name);
+		);
+	public generateId: () ==> nat1
+		generateId() == 
+		(
+			return if userList <> {}
+			then getMaxId(userList) + 1
+			else 1;
+		);
+
+	
+	
+
+functions
+	public getMaxId(s: set of User) x: nat1
+	pre s <> {}
+	post x in set s and forall y in set s & x.getUserID() >= y.getUserID();
+
+end MyReward
+
 -- User
 class User 
 
@@ -8,6 +43,7 @@ types
 values
 
 instance variables
+	public userId: UserID;
 	private userName: UserName;
 		inv len(userName) >= 8;
 	private credits: real := 0; -- in RM
@@ -26,6 +62,9 @@ operations
 		);
 	public checkCredit : () ==> real
 		checkCredit() == return credits;
+	public getUserID : () ==> nat1
+		getUserID() == return userId;
+
 
 functions
 
