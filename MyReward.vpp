@@ -18,9 +18,9 @@ operations
 			else 1;
 		);
 	public addUser:  seq of char ==> ()
-		addUser(name) ==
+		addUser(number) ==
 		(
-			userList := userList union {new User(generateId(),name)};
+			userList := userList union {new User(generateId(),number)};
 		);
 	public getUserList: () ==> set of User
 		getUserList() == 
@@ -51,7 +51,21 @@ operations
 			getUser(userId).topupCredit(topup);
 			updateUserReward(userId,topup);
 		);
+	private removeUserReward : nat1 ==> ()
+		removeUserReward(userId) ==
+		(
+			userToReward := {getUser(userId)} <-: userToReward;
+		);
 
+	public checkUsersStatus : () ==> ()
+		checkUsersStatus() ==
+		(
+			for all user in set userList do
+			(
+				if (user.getSubscription().checkSubscriptionStatus() = false) or (getUserReward(user.getUserId()).checkRewardStatus() = false)
+				then removeUserReward(user.getUserId())
+			)
+		)
 
 functions
 	public max: set of nat1 -> nat1
@@ -59,6 +73,11 @@ functions
 		let x in set s be st
 			forall y in set s & x >= y
 		in x;
+		
+thread
+-- not supported in VDM ++
+-- 	periodic(1000,0,0,0)(checkUsersStatus); -- check user status per second
+	while true do checkUsersStatus();
 
 end MyReward
 
@@ -74,10 +93,9 @@ instance variables
 	private userId: nat1;
 	private userName: UserName;
 		inv len(userName) >= 8;
+	private subscription: Subscription := new Subscription(0);
 	private credits: real := 0; -- in RM
 		inv credits >= 0;
-	private internetData: real := 1000; --in MB
-		inv internetData >= 0;
 
 operations
 	public User : nat1*seq of char ==> User -- Constructor
@@ -90,11 +108,14 @@ operations
 		topupCredit(topup) == 
 		(
 			credits := credits + topup;
+			subscription.updateSubscription(topup);
 		);
 	public checkCredit : () ==> real
 		checkCredit() == return credits;
 	public getUserId : () ==> nat1
 		getUserId() == return userId;
+	public getSubscription: () ==> Subscription
+		getSubscription() == return subscription;
 
 functions
 
@@ -117,7 +138,10 @@ instance variables
 	private dataLeft: real := 0; --in MB
 		inv dataLeft >= 0;
 	private durationLeft: Duration := mk_Duration(0,0,0,0);
-		inv durationLeft.hour < 24 and durationLeft.minute < 60 and durationLeft.second < 60;
+		inv durationLeft.day >= 0 and 
+			durationLeft.hour >= 0 and durationLeft.hour < 24 
+			and durationLeft.minute >= 0 and durationLeft.minute < 60 
+			and durationLeft.second >= 0 and durationLeft.second < 60;
 
 operations
 	public Reward: real ==> Reward -- Constructor
@@ -132,25 +156,24 @@ operations
 			then dataLeft := dataLeft + data;
 	private updateDurationLeft : nat ==> ()
 		updateDurationLeft(ss) ==
-		
 		(	
-			dcl tmpDuration: Duration := mk_Duration(0,0,0,0),
+			dcl tmpDuration: Duration := durationLeft,
 			 	count: nat := 0;
 			tmpDuration.second := durationLeft.second + ss;
 			
-			if tmpDuration.second >= 60
+			if (tmpDuration.second >= 60)
 			then 
 				count := tmpDuration.second div 60;
 				tmpDuration.second := tmpDuration.second - (count * 60);
 				tmpDuration.minute := durationLeft.minute + count;
 			
-			if tmpDuration.minute >= 60
+			if (tmpDuration.minute >= 60)
 			then 
 				count := tmpDuration.minute div 60;
 				tmpDuration.minute := tmpDuration.minute - (count * 60);
 				tmpDuration.hour := durationLeft.hour + count;
 			
-			if tmpDuration.hour >= 24
+			if (tmpDuration.hour >= 24)
 			then 
 				count := tmpDuration.hour div 24;
 				tmpDuration.hour := tmpDuration.hour - (count * 24);
@@ -166,6 +189,54 @@ operations
 				updateDataLeft(turnTopupToData(topup));
 				updateDurationLeft(turnTopupToDuration(topup));
 		);
+	public checkRewardStatus : () ==> bool
+		checkRewardStatus() ==
+		(
+			if (durationLeft = mk_Duration(0,0,0,0)) -- if no duration left terminate the subscription
+			then dataLeft := 0;
+
+			return (durationLeft <> mk_Duration(0,0,0,0));
+		);
+	private durationCountdown : () ==> () 
+		durationCountdown() ==
+		(	
+			if (durationLeft <> mk_Duration(0,0,0,0)) 
+			then 
+			(
+				if durationLeft.second <> 0
+				then 
+					durationLeft.second := durationLeft.second-1
+				elseif durationLeft.second = 0
+				then 
+				(
+					if durationLeft.minute <> 0
+					then 
+					(
+						durationLeft.second := 59;
+						durationLeft.minute := durationLeft.minute-1
+					)
+					elseif durationLeft.minute = 0
+					then 
+					(
+						if durationLeft.hour <> 0
+						then 
+						(
+							durationLeft.second := 59;
+							durationLeft.minute := 59;
+							durationLeft.hour := durationLeft.hour-1
+						)
+						elseif durationLeft.hour = 0 and durationLeft.day > 0
+						then 
+						(
+								durationLeft.second := 59;
+								durationLeft.minute := 59;
+								durationLeft.hour := 23;
+								durationLeft.day := durationLeft.day-1
+						)
+					)
+				)
+			)
+		);
 
 functions
 	private turnTopupToData : real -> real
@@ -176,4 +247,157 @@ functions
 	turnTopupToDuration(topup) ==
 		floor(topup * topupDurationRatio);
 
+thread
+-- not supported in VDM ++
+-- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
+	while durationLeft <> mk_Duration(0,0,0,0) do
+		durationCountdown();  -- deduct duration not in second
+
 end Reward
+
+--Subscription
+class Subscription
+
+types
+	Duration::	day: nat
+		hour: nat 
+		minute: nat
+		second: nat;
+	
+values
+	private subscriptionMaxDay: nat = 14; -- set limit of subscription to 14 days each top up, 
+	private topupDurationRatio: nat = 3600; -- in sec per RM, default 1 hour per RM (:charity
+
+instance variables
+	private status: bool := true; -- for active subscription
+	private internetData: real := 1000; --in MB
+		inv internetData >= 0;
+	private durationLeft: Duration := mk_Duration(7,0,0,0); --initial 7 days given
+		inv durationLeft.day >= 0 and durationLeft.day < subscriptionMaxDay 
+			and durationLeft.hour >= 0 and durationLeft.hour < 24 
+			and durationLeft.minute >= 0 and durationLeft.minute < 60 
+			and durationLeft.second >= 0 and durationLeft.second < 60;
+operations
+	public Subscription: real ==> Subscription -- Constructor
+		Subscription(topup) == 
+		(
+			updateSubscription(topup);
+			return self;
+		);
+	
+
+	private updateSubDurationLeft : nat ==> ()
+		updateSubDurationLeft(ss) ==
+		
+		(	
+			dcl tmpDuration: Duration := durationLeft,
+				count: nat := 0, maxSec:nat1 := subscriptionMaxDay*24*60*60;
+			
+			if ((durationLeft.day*86400)+(durationLeft.hour*3600)+(durationLeft.minute*60)+durationLeft.second+ss > maxSec)
+			then 
+				durationLeft := mk_Duration(subscriptionMaxDay-1,23,59,59)
+			else
+				(
+					tmpDuration.second := tmpDuration.second + ss;
+				
+					if tmpDuration.second >= 60
+					then 
+						count := tmpDuration.second div 60;
+						tmpDuration.second := tmpDuration.second - (count * 60);
+						tmpDuration.minute := tmpDuration.minute + count;
+					
+					if tmpDuration.minute >= 60
+					then 
+						count := tmpDuration.minute div 60;
+						tmpDuration.minute := tmpDuration.minute - (count * 60);
+						tmpDuration.hour := tmpDuration.hour + count;
+					
+					if tmpDuration.hour >= 24
+					then 
+						count := tmpDuration.hour div 24;
+						tmpDuration.hour := tmpDuration.hour - (count * 24);
+						tmpDuration.day := tmpDuration.day + count;
+						
+					durationLeft := tmpDuration;
+				)
+		);
+	private durationCountdown : () ==> () 
+		durationCountdown() ==
+		(	
+			if (durationLeft <> mk_Duration(0,0,0,0)) 
+			then 
+			(
+				if durationLeft.second > 0
+				then 
+					durationLeft.second := durationLeft.second-1
+				elseif durationLeft.second = 0
+				then 
+				(
+					if durationLeft.minute > 0
+					then 
+					(
+						durationLeft.second := 59;
+						durationLeft.minute := durationLeft.minute-1
+					)
+					elseif durationLeft.minute = 0
+					then 
+					(
+						if durationLeft.hour > 0
+						then 
+						(
+							durationLeft.second := 59;
+							durationLeft.minute := 59;
+							durationLeft.hour := durationLeft.hour-1
+						)
+						elseif durationLeft.hour = 0 and duration.day > 0
+						then 
+						(
+								durationLeft.second := 59;
+								durationLeft.minute := 59;
+								durationLeft.hour := 23;
+								durationLeft.day := durationLeft.day-1
+						)
+					)
+				)
+			)
+		);
+
+	public updateSubscription : real ==> ()
+		updateSubscription(topup) ==
+		(
+			if (topup > 0)
+			then
+			(
+				updateSubDurationLeft(topupToSubDuration(topup));
+				if (status = false) -- active the subscription if expired
+				then status := true;
+			)
+
+		);
+	private terminateSubscription : () ==> ()
+		terminateSubscription() ==
+		(
+			internetData := 0;
+			status := false;
+		);
+	public checkSubscriptionStatus : () ==> bool
+		checkSubscriptionStatus() ==
+		(
+			if (durationLeft = mk_Duration(0,0,0,0)) -- if no duration left terminate the subscription
+			then terminateSubscription();
+
+			return status;
+		)
+
+functions
+	private topupToSubDuration : real -> real
+		topupToSubDuration(topup) ==
+			floor(topup * topupDurationRatio);
+
+thread
+-- not supported in VDM ++
+-- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
+	while durationLeft <> mk_Duration(0,0,0,0) and status do
+		durationCountdown() -- deduct duration but not in second
+	
+end Subscription
