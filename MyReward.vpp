@@ -81,13 +81,11 @@ operations
 		(
 			for all user in set userList do
 			(
-				if (user.getSubscription().checkSubscriptionStatus() = false) or (getUserReward(user.getUserId()) = nil)
-				then removeUserReward(user.getUserId());
-
-				if (user.getSubscription().checkSubscriptionStatus() = true) and (getUserReward(user.getUserId()) <> nil)
-				then 
+				if (getUserReward(user.getUserId()) <> nil) -- if the user has reward
+				then	-- check if the subscription is terminated or the reward is expired
 				(
-					if (getUserReward(user.getUserId()).checkRewardStatus() = false)
+					if (user.getSubscription().checkSubscriptionStatus() = false) 
+						or (getUserReward(user.getUserId()).checkRewardStatus() = false)
 					then removeUserReward(user.getUserId());
 				)
 			)
@@ -345,10 +343,11 @@ operations
 			dcl tmpDuration: Duration := durationLeft,
 				count: nat := 0, maxSec:nat1 := subscriptionMaxDay*24*60*60;
 			
-			if ((durationLeft.day*86400)+(durationLeft.hour*3600)+(durationLeft.minute*60)+durationLeft.second+ss > maxSec)
-			then 
+			if ((durationLeft.day*86400) + (durationLeft.hour*3600) -- if subduration will more than subscriptionMaxDay
+					+ (durationLeft.minute*60) + durationLeft.second + ss > maxSec)
+			then  -- limit the subDuration
 				durationLeft := mk_Duration(subscriptionMaxDay-1,23,59,59)
-			else
+			else -- add to subDuration
 				(
 					tmpDuration.second := tmpDuration.second + ss;
 				
