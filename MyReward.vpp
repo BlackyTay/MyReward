@@ -13,7 +13,7 @@ operations
 	private generateId: () ==> nat1
 		generateId() == 
 		(
-			return if userList <> {}
+			return if (userList <> {})
 			then max(getUserListID()) + 1
 			else 1;
 		);
@@ -159,25 +159,31 @@ operations
 		(	
 			dcl tmpDuration: Duration := durationLeft,
 			 	count: nat := 0;
-			tmpDuration.second := durationLeft.second + ss;
+			tmpDuration.second := tmpDuration.second + ss;
 			
 			if (tmpDuration.second >= 60)
 			then 
+			(
 				count := tmpDuration.second div 60;
 				tmpDuration.second := tmpDuration.second - (count * 60);
-				tmpDuration.minute := durationLeft.minute + count;
+				tmpDuration.minute := tmpDuration.minute + count;
+			);
 			
 			if (tmpDuration.minute >= 60)
-			then 
+			then
+			(
 				count := tmpDuration.minute div 60;
 				tmpDuration.minute := tmpDuration.minute - (count * 60);
-				tmpDuration.hour := durationLeft.hour + count;
+				tmpDuration.hour := tmpDuration.hour + count;
+			); 
 			
 			if (tmpDuration.hour >= 24)
-			then 
+			then
+			(
 				count := tmpDuration.hour div 24;
 				tmpDuration.hour := tmpDuration.hour - (count * 24);
-				tmpDuration.day := durationLeft.day + count;
+				tmpDuration.day := tmpDuration.day + count;
+			); 
 				
 			durationLeft := tmpDuration;
 		);
@@ -250,7 +256,7 @@ functions
 thread
 -- not supported in VDM ++
 -- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
-	while durationLeft <> mk_Duration(0,0,0,0) do
+	while (durationLeft <> mk_Duration(0,0,0,0)) do
 		durationCountdown();  -- deduct duration not in second
 
 end Reward
@@ -300,23 +306,29 @@ operations
 				(
 					tmpDuration.second := tmpDuration.second + ss;
 				
-					if tmpDuration.second >= 60
+					if (tmpDuration.second >= 60)
 					then 
+					(	
 						count := tmpDuration.second div 60;
 						tmpDuration.second := tmpDuration.second - (count * 60);
 						tmpDuration.minute := tmpDuration.minute + count;
+					);
 					
-					if tmpDuration.minute >= 60
+					if (tmpDuration.minute >= 60)
 					then 
+					(
 						count := tmpDuration.minute div 60;
 						tmpDuration.minute := tmpDuration.minute - (count * 60);
 						tmpDuration.hour := tmpDuration.hour + count;
+					);
 					
-					if tmpDuration.hour >= 24
+					if (tmpDuration.hour >= 24)
 					then 
+					(
 						count := tmpDuration.hour div 24;
 						tmpDuration.hour := tmpDuration.hour - (count * 24);
 						tmpDuration.day := tmpDuration.day + count;
+					);
 						
 					durationLeft := tmpDuration;
 				)
@@ -349,7 +361,7 @@ operations
 							durationLeft.minute := 59;
 							durationLeft.hour := durationLeft.hour-1
 						)
-						elseif durationLeft.hour = 0 and duration.day > 0
+						elseif durationLeft.hour = 0 and durationLeft.day > 0
 						then 
 						(
 								durationLeft.second := 59;
@@ -397,7 +409,7 @@ functions
 thread
 -- not supported in VDM ++
 -- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
-	while durationLeft <> mk_Duration(0,0,0,0) and status do
-		durationCountdown() -- deduct duration but not in second
+	while (durationLeft <> mk_Duration(0,0,0,0)) and status do
+		durationCountdown(); -- deduct duration but not in second
 	
 end Subscription
