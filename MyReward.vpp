@@ -10,6 +10,12 @@ instance variables
 	private userToReward: map User to Reward := {|->};
 
 operations
+	public MyReward: () ==> MyReward 
+		MyReward() ==
+		(
+			start(self); -- start thread
+			self.WaitForThreadStart(); -- ensure thread is started with sync
+		);
 	private generateId: () ==> nat1
 		generateId() == 
 		(
@@ -20,12 +26,14 @@ operations
 	public addUser:  seq of char ==> ()
 		addUser(number) ==
 		(
-			userList := userList union {new User(generateId(),number)};
+			dcl newUser : User;
+				newUser := new User(generateId(),number);
+			userList := userList union {newUser};
 		);
 	public getUserList: () ==> set of User
 		getUserList() == 
 			return userList;
-	public getUserListID: () ==> set of nat1
+	private getUserListID: () ==> set of nat1
 		getUserListID() == 
 			return {y.getUserId() | y in set userList & y.getUserId() > 0};
 	public getUser: nat1 ==> User
@@ -37,14 +45,28 @@ operations
 	public checkUserReward: nat1 ==> bool
 		checkUserReward(userId) ==
 			return getUser(userId) in set dom userToReward;
-	public getUserReward: nat1 ==> Reward
+	public getUserReward: nat1 ==> [Reward]
 		getUserReward(userId) ==
-			return userToReward(getUser(userId));
-	public updateUserReward: nat1*real ==> ()
+		(
+			dcl user : User;
+				user := getUser(userId);
+		
+			 return 
+				if ({user} subset dom userToReward)
+				then userToReward(user)
+				else nil
+		);
+	private updateUserReward: nat1*real ==> ()
 		updateUserReward(userId,topup) ==
 			if checkUserReward(userId)
 			then getUserReward(userId).updateReward(topup)
-			else userToReward := userToReward++{getUser(userId) |-> new Reward(topup)};
+			else (
+				dcl newReward : Reward;
+					newReward := new Reward(topup);
+				userToReward := userToReward++{getUser(userId) |-> newReward};
+				start(newReward); -- start thread
+				newReward.WaitForThreadStart(); -- ensure thread is started with sync
+			);
 	public topupCreditForUser: nat1*real ==> ()
 		topupCreditForUser(userId,topup) ==
 		(
@@ -57,15 +79,30 @@ operations
 			userToReward := {getUser(userId)} <-: userToReward;
 		);
 
-	public checkUsersStatus : () ==> ()
+	private checkUsersStatus : () ==> ()
 		checkUsersStatus() ==
 		(
 			for all user in set userList do
 			(
-				if (user.getSubscription().checkSubscriptionStatus() = false) or (getUserReward(user.getUserId()).checkRewardStatus() = false)
-				then removeUserReward(user.getUserId())
+				if (user.getSubscription().checkSubscriptionStatus() = false) or (getUserReward(user.getUserId()) = nil)
+				then removeUserReward(user.getUserId());
+
+				if (user.getSubscription().checkSubscriptionStatus() = true) and (getUserReward(user.getUserId()) <> nil)
+				then 
+				(
+					if (getUserReward(user.getUserId()).checkRewardStatus() = false)
+					then removeUserReward(user.getUserId());
+				)
 			)
-		)
+		);
+		public WaitForThreadStart : () ==> ()
+		WaitForThreadStart() == skip;
+
+		private ThreadStarted : () ==> ()
+		ThreadStarted() == skip;
+
+sync
+	per WaitForThreadStart => #fin(ThreadStarted) > 0
 
 functions
 	public max: set of nat1 -> nat1
@@ -75,9 +112,12 @@ functions
 		in x;
 		
 thread
--- not supported in VDM ++
+(
+	ThreadStarted();
+-- 	not supported in VDM ++
 -- 	periodic(1000,0,0,0)(checkUsersStatus); -- check user status per second
 	while true do checkUsersStatus();
+);
 
 end MyReward
 
@@ -103,6 +143,8 @@ operations
 		(
 			userId := id;
 			userName := name;
+			start(subscription); -- start thread
+			subscription.WaitForThreadStart(); -- ensure thread is started with sync
 		);
 	public topupCredit : real ==> ()
 		topupCredit(topup) == 
@@ -243,6 +285,14 @@ operations
 				)
 			)
 		);
+	public WaitForThreadStart : () ==> ()
+			WaitForThreadStart() == skip;
+
+	private ThreadStarted : () ==> ()
+	ThreadStarted() == skip;
+
+sync
+	per WaitForThreadStart => #fin(ThreadStarted) > 0
 
 functions
 	private turnTopupToData : real -> real
@@ -254,10 +304,13 @@ functions
 		floor(topup * topupDurationRatio);
 
 thread
--- not supported in VDM ++
+(
+	ThreadStarted();
+--	not supported in VDM ++
 -- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
 	while (durationLeft <> mk_Duration(0,0,0,0)) do
 		durationCountdown();  -- deduct duration not in second
+);
 
 end Reward
 
@@ -399,7 +452,15 @@ operations
 			then terminateSubscription();
 
 			return status;
-		)
+		);
+	public WaitForThreadStart : () ==> ()
+			WaitForThreadStart() == skip;
+
+	private ThreadStarted : () ==> ()
+	ThreadStarted() == skip;
+
+sync
+	per WaitForThreadStart => #fin(ThreadStarted) > 0
 
 functions
 	private topupToSubDuration : real -> real
@@ -407,9 +468,12 @@ functions
 			floor(topup * topupDurationRatio);
 
 thread
--- not supported in VDM ++
+(
+	ThreadStarted();
+-- 	not supported in VDM ++
 -- 	periodic(1000,0,0,0)(durationCountdown); -- deduct duration per second
 	while (durationLeft <> mk_Duration(0,0,0,0)) and status do
 		durationCountdown(); -- deduct duration but not in second
+);
 	
 end Subscription
