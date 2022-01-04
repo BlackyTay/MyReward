@@ -64,8 +64,6 @@ operations
 				dcl newReward : Reward;
 					newReward := new Reward(topup);
 				userToReward := userToReward++{getUser(userId) |-> newReward};
-				start(newReward); -- start thread
-				newReward.WaitForThreadStart(); -- ensure thread is started with sync
 			);
 	public topupCreditForUser: nat1*real ==> ()
 		topupCreditForUser(userId,topup) ==
@@ -143,8 +141,6 @@ operations
 		(
 			userId := id;
 			userName := name;
-			start(subscription); -- start thread
-			subscription.WaitForThreadStart(); -- ensure thread is started with sync
 		);
 	public topupCredit : real ==> ()
 		topupCredit(topup) == 
@@ -341,7 +337,8 @@ operations
 		Subscription(topup) == 
 		(
 			updateSubscription(topup);
-			return self;
+			start(self); -- start thread
+			self.WaitForThreadStart(); -- ensure thread is started with sync
 		);
 	
 
