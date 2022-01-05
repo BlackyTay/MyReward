@@ -182,7 +182,8 @@ operations
 		Reward(topup) == 
 		(
 			updateReward(topup);
-			return self;
+			start(self);
+			self.WaitForThreadStart();
 		);
 	private updateDataLeft : real ==> ()
 		updateDataLeft(data) ==
