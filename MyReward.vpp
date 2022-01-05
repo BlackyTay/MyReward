@@ -24,10 +24,10 @@ operations
 			else 1;
 		);
 	public addUser:  seq of char ==> ()
-		addUser(number) ==
+		addUser(name) ==
 		(
 			dcl newUser : User;
-				newUser := new User(generateId(),number);
+				newUser := new User(generateId(),name);
 			userList := userList union {newUser};
 		);
 	public getUserList: () ==> set of User
